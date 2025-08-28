@@ -1,11 +1,84 @@
+import argparse
 import datetime
 import json
 from pathlib import Path
 from typing import Any, Dict, List
 from datetime import datetime, timezone
 
-TASK_FILE = Path("bd2.json")
+TASK_FILE = Path("bd.json")
 STATUS_VALID = {"todo", "in-progress", "done"}
+
+
+# Consola
+def main_cli(argv=None) -> None:
+
+    parser = argparse.ArgumentParser(description="CLI Todo Aplicacion")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    # Subcomando add
+    p = sub.add_parser("add", help="Añadir una nueva tarea")
+    p.add_argument("-d", "--desc", type=str, help="Descripción de la tarea")
+
+    # Subcomando list
+    p = sub.add_parser("list", help="Listar tareas")
+    p.add_argument(
+        "--status",
+        "-s",
+        type=str,
+        choices=STATUS_VALID,
+        help="Filtrar por estado (todo, in-progress, done)",
+    )
+
+    # Subcomando update
+    p = sub.add_parser("update", help="Actualizar una tarea")
+    p.add_argument("--id", "-i", type=int, help="ID de la tarea a actualizar")
+    p.add_argument(
+        "--status",
+        "-s",
+        type=str,
+        choices=STATUS_VALID,
+        help="Nuevo estado de la tarea (todo, in-progress, done)",
+    )
+    p.add_argument("--desc", "-d", type=str, help="Nueva descripción de la tarea")
+
+    # Subcomando delete
+    delete_parser = sub.add_parser("delete", help="Borrar una tarea")
+    delete_parser.add_argument("--id", "-i", type=int, help="ID de la tarea a borrar")
+
+    args = parser.parse_args(argv)
+    tasks = loadTasks()
+
+    if args.cmd == "add":
+        addTask(tasks, args.desc)
+        saveTasks(tasks)
+        print("Tarea añadida.")
+
+    elif args.cmd == "update":
+        t = returnTask(tasks, args.id)
+        if not t:
+            print(f"No se encontró tarea con ID {args.id}")
+            return
+        modifyDesc(t, args.desc) if args.desc else None
+        modifyState(t, args.status) if args.status else None
+        saveTasks(tasks)
+
+    elif args.cmd == "delete":
+        if deleteTask(tasks, args.id):
+            saveTasks(tasks)
+            print(f"Tarea con ID {args.id} borrada.")
+        else:
+            print(f"No se encontró tarea con ID {args.id}")
+
+    elif args.cmd == "list":
+
+        if args.status:
+            t = returnByState(tasks, args.status)
+            printTasks(t)
+        else:
+            printTasks(tasks)
+
+
+#####
 
 
 # Crear json si no existe
@@ -96,7 +169,7 @@ def deleteTask(tasks: List[Dict[str, Any]], id_task: int) -> bool:
 
 
 # Listar dones
-def returnByState(tasks: List[Dict[str, any]], status: str) -> List[Dict[str, any]]:
+def returnByState(tasks: List[Dict[str, any]], status: str) -> List[Dict[str, Any]]:
     aux = []
     for t in tasks:
         if t["status"] == status:
@@ -104,21 +177,48 @@ def returnByState(tasks: List[Dict[str, any]], status: str) -> List[Dict[str, an
     return aux
 
 
-if __name__ == "__main__":
-    tasks = loadTasks()
+# Tabla presentacion tareas
+def printTasks(tasks: List[Dict[str, Any]]) -> None:
+    """Imprime las tareas en formato tabla"""
+    if not tasks:
+        print("No hay tareas")
+        return
 
-    tasks.append({"id": 1, "description": "probar save", "status": "todo"})
-    addTask(tasks, "probar addTask")
-    print(returnTask(tasks, 1))
-    modifyState(returnTask(tasks, 1), "done")
-    if deleteTask(tasks, 333):
-        print("Borrado")
-    else:
-        print("No borrado")
-    print(returnTask(tasks, 1))
-    print(returnTask(tasks, 55555))
-    print(returnTask(tasks, 2))
-    modifyDesc(returnTask(tasks, 55555), "jaime")
-    print(returnTask(tasks, 55555))
-    print(returnDone(tasks, "done"))
-    saveTasks(tasks)
+    print(
+        f"{'ID':<5} {'Description':<30} {'Status':<12} {'Created At':<35} {'Updated At':<35}"
+    )
+    print("-" * 100)
+    for t in tasks:
+        created_at = t.get("createdAt", "N/A")
+        updated_at = t.get("updatedAt", "N/A")
+        print(
+            f"{t['id']:<5} {t['description']:<30} {t['status']:<12} {created_at:<5} {updated_at:<35}"
+        )
+
+
+if __name__ == "__main__":
+    main_cli()
+
+### Ejemplos de task
+# [
+#  {
+#    "id": 1,
+#    "description": "probar save",
+#    "status": "done",
+#    "updatedAt": "2025-08-27T23:09:24.426868+00:00"
+#  },
+#  {
+#    "id": 2,
+#    "description": "probar addTask",
+#    "status": "todo",
+#    "createdAt": "2025-08-27T23:09:06.081217+00:00",
+#    "updatedAt": "2025-08-27T23:09:06.081217+00:00"
+#  },
+#  {
+#    "id": 3,
+#    "description": "probar addTask",
+#    "status": "todo",
+#    "createdAt": "2025-08-27T23:09:24.426868+00:00",
+#    "updatedAt": "2025-08-27T23:09:24.426868+00:00"
+#  }
+# ]
